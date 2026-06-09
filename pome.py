@@ -2,19 +2,32 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-
+import os
 
 st.set_page_config(page_title="boAt Price Analytics", layout="wide")
 
 
 @st.cache_data
 def load_data():
-    file_path = r"C:\Users\sharo\Downloads\boat_products_price_history_india_format.csv"
-    df = pd.read_csv(file_path)
+    relative_path = "boat_products_price_history_india_format.csv"
+    absolute_path = r"C:\Users\sharo\Downloads\boat_products_price_history_india_format.csv"
+    
+    if os.path.exists(relative_path):
+        df = pd.read_csv(relative_path)
+    elif os.path.exists(absolute_path):
+        df = pd.read_csv(absolute_path)
+    else:
+        raise FileNotFoundError("Could not locate the price history CSV file locally or in the repository.")
+        
     df["Date_obj"] = pd.to_datetime(df["Date"], format="%d-%m-%Y")
     return df.sort_values("Date_obj")
 
-df = load_data()
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Failed to load dataset: {e}")
+    st.info("Please make sure the CSV exists in the same folder or at: C:\\Users\\sharo\\Downloads\\boat_products_price_history_india_format.csv")
+    st.stop()
 
 st.title("⚓ boAt Product Price Analytics")
 
