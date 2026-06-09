@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
@@ -9,7 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 import datetime
 import os
-st.set_page_config(page_title="boAt Price Analytics", layout="wide")
+
 # Set page layout configuration
 st.set_page_config(
     page_title="boAt Price Tracker & ML Predictor",
@@ -17,6 +15,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 # Apply custom styling for a premium dark-mode feel
 st.markdown("""
 <style>
@@ -73,23 +72,31 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 # Load data helper function
 @st.cache_data
 def load_data():
     relative_path = "boat_products_price_history_india_format.csv"
+    absolute_path = r"C:\Users\sharo\Downloads\boat_products_price_history_india_format.csv"
+    
+    if os.path.exists(relative_path):
+        df = pd.read_csv(relative_path)
+    elif os.path.exists(absolute_path):
+        df = pd.read_csv(absolute_path)
+    else:
         raise FileNotFoundError("Could not locate the price history CSV file locally or in the repository.")
         
     df["Date_obj"] = pd.to_datetime(df["Date"], format="%d-%m-%Y")
-    return df.sort_values("Date_obj")
     df = df.sort_values("Date_obj")
     return df
+
 try:
     df = load_data()
 except Exception as e:
     st.error(f"Failed to load dataset: {e}")
     st.info("Please make sure the CSV exists in the same folder or at: C:\\Users\\sharo\\Downloads\\boat_products_price_history_india_format.csv")
     st.stop()
-st.title("⚓ boAt Product Price Analytics")
+
 # Helper function to categorize products based on name
 def get_category(name):
     name_lower = name.lower()
@@ -107,33 +114,33 @@ def get_category(name):
         else:
             return "Neckbands / Earphones"
     return "Other Accessories"
+
 # Add categories to dataframe
 df["Category"] = df["Product Name"].apply(get_category)
-product_list = sorted(df["Product Name"].unique())
-selected_product = st.sidebar.selectbox("Choose a Product Line:", product_list)
+
 # Sidebar UI
 st.sidebar.markdown("<h2 style='text-align: center; color: #38bdf8;'>⚓ boAt Engine</h2>", unsafe_allow_html=True)
 st.sidebar.write("Analyze price variations and predict buying opportunities using Machine Learning.")
+
 # Sidebar Filters
 category_list = ["All Categories"] + sorted(df["Category"].unique().tolist())
 selected_category = st.sidebar.selectbox("Filter Category:", category_list)
-df_p = df[df["Product Name"] == selected_product]
+
 if selected_category != "All Categories":
     filtered_df = df[df["Category"] == selected_category]
 else:
     filtered_df = df
-fig, ax = plt.subplots(figsize=(11, 4.5), facecolor='#def7ec') 
-ax.set_facecolor('#ffffff')
+
 product_list = sorted(filtered_df["Product Name"].unique().tolist())
 selected_product = st.sidebar.selectbox("Select Product Line:", product_list)
+
 # Filter product dataset
 df_p = df[df["Product Name"] == selected_product].sort_values("Date_obj")
-ax.plot(df_p["Date_obj"], df_p["Price (INR)"], color="#e07a5f", linewidth=1.8, drawstyle="steps-post", zorder=3)
+
 # Main Page Header
 st.markdown(f"<h1 style='margin-bottom:0;'>🏷️ {selected_product}</h1>", unsafe_allow_html=True)
 st.markdown(f"<p style='color: #64748b; font-size:1.1rem; margin-top:0;'>Category: <b>{get_category(selected_product)}</b> | Tracking <b>{len(df_p)} days</b> of historical prices</p>", unsafe_allow_html=True)
-ax.fill_between(df_p["Date_obj"], df_p["Price (INR)"], step="post", color="#fceade", alpha=0.7, zorder=2)
-ax.fill_between(df_p["Date_obj"], df_p["Price (INR)"], step="post", color="#e8f5e9", alpha=0.4, zorder=1)
+
 # Machine Learning & Feature Engineering
 @st.cache_data(ttl=600)  # cache training for 10 mins per product
 def train_and_forecast(df_product):
@@ -219,28 +226,26 @@ def train_and_forecast(df_product):
     importances_dict = dict(zip(feature_cols, avg_importances))
     
     return forecast_prices, maes, importances_dict, feature_cols, avg_mae, avg_r2
+
 with st.spinner("🧠 Re-training Machine Learning models..."):
     forecast_prices, maes, importances, features, avg_mae, avg_r2 = train_and_forecast(df_p)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.spines['left'].set_color('#dddddd')
-ax.spines['bottom'].set_color('#dddddd')
+
 # Basic Stats Calculations
 latest_price = int(df_p["Price (INR)"].values[-1])
 latest_date = df_p["Date_obj"].values[-1]
 avg_price = int(df_p["Price (INR)"].mean())
 min_price = int(df_p["Price (INR)"].min())
 max_price = int(df_p["Price (INR)"].max())
+
 # Dates for min/max prices
 min_price_date = df_p[df_p["Price (INR)"] == min_price]["Date"].values[0]
 max_price_date = df_p[df_p["Price (INR)"] == max_price]["Date"].values[0]
-vals = ax.get_yticks()
-ax.set_yticks(vals)
-ax.set_yticklabels([f"₹{int(v)}" if v >= 1000 else f"₹{int(v)}" for v in vals], color='#555555')
+
 # Previous price to see change
 prev_price = int(df_p["Price (INR)"].values[-2]) if len(df_p) > 1 else latest_price
 price_change = latest_price - prev_price
 price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
+
 # -----------------
 # CONFIDENCE SCORE CALCULATION
 # -----------------
@@ -250,22 +255,16 @@ recent_min = recent_30["Price (INR)"].min()
 recent_max = recent_30["Price (INR)"].max()
 range_recent = recent_max - recent_min
 recent_percentile = (latest_price - recent_min) / range_recent if range_recent > 0 else 0.5
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b'))
-ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-ax.tick_params(axis='x', colors='#555555')
+
 overall_range = max_price - min_price
 overall_percentile = (latest_price - min_price) / overall_range if overall_range > 0 else 0.5
-# Append matching UI header items
-fig.text(0.04, 0.88, "Price History", fontsize=16, fontweight='bold', color='#111111')
-fig.text(0.80, 0.88, "1 Month   3 Month   [ Max ]", fontsize=10, color='#333333', 
-         bbox=dict(boxstyle="round,pad=0.3", fc="#ffffff", ec="#dddddd", lw=1))
+
 percentile_score = (1.0 - recent_percentile) * 0.7 + (1.0 - overall_percentile) * 0.3
-plt.tight_layout()
-fig.subplots_adjust(top=0.82)
+
 # 2. ML Forecast Trend Score
 forecast_5d = forecast_prices[4] # 5-day prediction
 predicted_change_5d = (forecast_5d - latest_price) / latest_price
-st.pyplot(fig)
+
 # If price is predicted to drop, buying now is sub-optimal unless it's already near min
 # If price is predicted to rise, buying now is highly recommended
 if predicted_change_5d >= 0.05:
@@ -275,14 +274,10 @@ elif predicted_change_5d <= -0.05:
 else:
     # Scale from 0.0 to 1.0 between -5% and +5%
     trend_score = (predicted_change_5d + 0.05) / 0.10
-p_max = df_p["Price (INR)"].max()
-p_min = df_p["Price (INR)"].min()
-p_avg = int(df_p["Price (INR)"].mean())
+
 # Combine scores (60% based on historical placement, 40% based on ML forecast trend)
 confidence_score = int(np.clip((0.6 * percentile_score + 0.4 * trend_score) * 100, 5, 98))
-col1, col2, col3 = st.columns(3)
-col1.metric("Peak Maximum Price", f"₹{p_max}")
-col2.metric("Floor Minimum Price", f"₹{p_min}")
+
 # Define Recommendation status
 if confidence_score >= 85:
     recommendation = "STRONG BUY"
@@ -319,8 +314,10 @@ else:
     advice_bg = "#fef2f2"
     advice_border = "#ef4444"
     advice_font = "#991b1b"
+
 # --- KPI METRICS DISPLAY ---
 col1, col2, col3, col4 = st.columns(4)
+
 with col1:
     change_color = "#ef4444" if price_change > 0 else "#10b981" if price_change < 0 else "#64748b"
     change_symbol = "+" if price_change > 0 else ""
@@ -333,6 +330,7 @@ with col1:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 with col2:
     st.markdown(f"""
     <div class="metric-card">
@@ -341,6 +339,7 @@ with col2:
         <div class="metric-sub" style="color: #94a3b8;">Recorded on {min_price_date}</div>
     </div>
     """, unsafe_allow_html=True)
+
 with col3:
     st.markdown(f"""
     <div class="metric-card">
@@ -349,6 +348,7 @@ with col3:
         <div class="metric-sub" style="color: #94a3b8;">Recorded on {max_price_date}</div>
     </div>
     """, unsafe_allow_html=True)
+
 with col4:
     savings_pct = ((avg_price - latest_price) / avg_price) * 100 if avg_price > 0 else 0.0
     savings_text = f"Save ₹{avg_price - latest_price:,} ({savings_pct:.1f}%)" if latest_price < avg_price else f"Inflated by ₹{latest_price - avg_price:,} ({abs(savings_pct):.1f}%)"
@@ -360,9 +360,12 @@ with col4:
         <div class="metric-sub" style="color: {savings_color}; font-weight: bold;">{savings_text}</div>
     </div>
     """, unsafe_allow_html=True)
+
 st.write("---")
+
 # Layout: Main Chart (Left 70%) & Recommendation card (Right 30%)
 main_col, side_col = st.columns([7, 3])
+
 with main_col:
     st.subheader("📈 Price History & ML 7-Day Forecast")
     
@@ -450,6 +453,7 @@ with main_col:
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 with side_col:
     st.subheader("💡 Buy Decision Engine")
     
@@ -479,9 +483,12 @@ with side_col:
         <b>Forecast Insight:</b> Model predicts price will {trend_desc} in the next 5 days ({trend_symbol} expected price: <b>₹{int(forecast_5d):,}</b>).
     </div>
     """, unsafe_allow_html=True)
+
 st.write("---")
+
 # Visual Grid: Simulator, Recommendations, and ML Insights
 tab1, tab2, tab3 = st.tabs(["💰 Smart Savings Simulator", "📦 Smart Recommendations", "🔬 ML Algorithm Insights"])
+
 with tab1:
     st.subheader("Smart Savings & Target Alert Simulator")
     st.write("Determine potential savings and simulate target price alerts based on historical volatility.")
@@ -517,6 +524,7 @@ with tab1:
             </ul>
         </div>
         """, unsafe_allow_html=True)
+
 with tab2:
     st.subheader("🛍️ Alternative Deals in Category: " + get_category(selected_product))
     st.write("We calculated the Buy Confidence Score for other products in this category. Here are the best deals currently available:")
@@ -566,6 +574,7 @@ with tab2:
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.info("Insufficient historical data to analyze alternative recommendations.")
+
 with tab3:
     st.subheader("🔬 Random Forest Regressor - Details")
     
@@ -626,6 +635,7 @@ with tab3:
                 coloraxis_showscale=False
             )
             st.plotly_chart(fig_imp, use_container_width=True)
+
 # Expandable Data Explorer
 with st.expander("📥 Explore Raw Historical Price Data"):
     csv_download = df_p.drop(columns=["Category"]).to_csv(index=False).encode('utf-8')
@@ -636,4 +646,3 @@ with st.expander("📥 Explore Raw Historical Price Data"):
         mime="text/csv"
     )
     st.dataframe(df_p[["Date", "Price (INR)"]].sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
-col3.metric("Calculated Baseline Average", f"₹{p_avg}")
